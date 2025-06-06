@@ -8,30 +8,31 @@ import gc
 def load_csv(file) -> pd.DataFrame:
     """Load CSV file into pandas DataFrame with error handling."""
     try:
-        # Read the file content
-        content = file.getvalue()
-        # Try different encodings
-        for encoding in ['utf-8', 'latin1', 'cp1252']:
-            try:
-                decoded_content = content.decode(encoding)
-                # Create a StringIO object
-                csv_data = io.StringIO(decoded_content)
-                # Read CSV with more flexible parsing and optimized settings
-                df = pd.read_csv(
-                    csv_data,
-                    encoding=encoding,
-                    on_bad_lines='skip',
-                    engine='c',  # Use C engine for better performance
-                    memory_map=True  # Use memory mapping for large files
-                )
-                return df
-            except UnicodeDecodeError:
-                continue
-            except Exception as e:
-                st.error(f"Error reading file {file.name} with encoding {encoding}: {str(e)}")
-                continue
-        st.error(f"Could not read file {file.name} with any supported encoding")
-        return None
+        # Read CSV directly from the uploaded file
+        df = pd.read_csv(
+            file,
+            encoding='utf-8',
+            on_bad_lines='skip',
+            engine='c',
+            memory_map=True
+        )
+        return df
+    except UnicodeDecodeError:
+        try:
+            # Reset file pointer
+            file.seek(0)
+            # Try with different encoding
+            df = pd.read_csv(
+                file,
+                encoding='latin1',
+                on_bad_lines='skip',
+                engine='c',
+                memory_map=True
+            )
+            return df
+        except Exception as e:
+            st.error(f"Error reading file {file.name} with latin1 encoding: {str(e)}")
+            return None
     except Exception as e:
         st.error(f"Error reading file {file.name}: {str(e)}")
         return None
