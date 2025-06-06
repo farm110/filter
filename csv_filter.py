@@ -8,33 +8,36 @@ import gc
 def load_csv(file) -> pd.DataFrame:
     """Load CSV file into pandas DataFrame with error handling."""
     try:
-        # Read CSV directly from the uploaded file
-        df = pd.read_csv(
-            file,
-            encoding='utf-8',
-            on_bad_lines='skip',
-            engine='c',
-            memory_map=True
-        )
-        return df
-    except UnicodeDecodeError:
+        # Reset file pointer to beginning
+        file.seek(0)
+        
+        # Try reading with python engine first (more forgiving)
         try:
-            # Reset file pointer
-            file.seek(0)
-            # Try with different encoding
             df = pd.read_csv(
                 file,
-                encoding='latin1',
+                encoding='utf-8',
                 on_bad_lines='skip',
-                engine='c',
-                memory_map=True
+                engine='python',  # Use python engine instead of c
+                memory_map=False  # Disable memory mapping
             )
             return df
-        except Exception as e:
-            st.error(f"Error reading file {file.name} with latin1 encoding: {str(e)}")
-            return None
+        except Exception as e1:
+            # If first attempt fails, try with latin1 encoding
+            file.seek(0)
+            try:
+                df = pd.read_csv(
+                    file,
+                    encoding='latin1',
+                    on_bad_lines='skip',
+                    engine='python',
+                    memory_map=False
+                )
+                return df
+            except Exception as e2:
+                st.error(f"Error reading file {file.name}: First attempt: {str(e1)}, Second attempt: {str(e2)}")
+                return None
     except Exception as e:
-        st.error(f"Error reading file {file.name}: {str(e)}")
+        st.error(f"Error accessing file {file.name}: {str(e)}")
         return None
 
 def filter_dataframe(df: pd.DataFrame, template_values: set, column_name: str) -> pd.DataFrame:
