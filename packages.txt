@@ -1,2 +1,6 @@
-python3.11
-python3.11-dev 
+python3.9
+python3.9-dev
+python3-pip
+python3-setuptools
+python3-wheel
+python3-venv 
