@@ -8,38 +8,11 @@ import os
 from datetime import datetime
 
 def load_csv(file) -> pd.DataFrame:
-    """Load CSV file into pandas DataFrame with error handling."""
+    """Load a CSV file into a pandas DataFrame."""
     try:
-        # Reset file pointer to beginning
-        file.seek(0)
-        
-        # Try reading with python engine first (more forgiving)
-        try:
-            df = pd.read_csv(
-                file,
-                encoding='utf-8',
-                on_bad_lines='skip',
-                engine='python',  # Use python engine instead of c
-                memory_map=False  # Disable memory mapping
-            )
-            return df
-        except Exception as e1:
-            # If first attempt fails, try with latin1 encoding
-            file.seek(0)
-            try:
-                df = pd.read_csv(
-                    file,
-                    encoding='latin1',
-                    on_bad_lines='skip',
-                    engine='python',
-                    memory_map=False
-                )
-                return df
-            except Exception as e2:
-                st.error(f"Error reading file {file.name}: First attempt: {str(e1)}, Second attempt: {str(e2)}")
-                return None
+        return pd.read_csv(file)
     except Exception as e:
-        st.error(f"Error accessing file {file.name}: {str(e)}")
+        st.error(f"Error loading file {file.name}: {str(e)}")
         return None
 
 def filter_dataframe(df: pd.DataFrame, template_values: set, column_name: str) -> pd.DataFrame:
@@ -53,44 +26,28 @@ def filter_dataframe(df: pd.DataFrame, template_values: set, column_name: str) -
         st.error(f"Error filtering data: {str(e)}")
         return df
 
-def process_files(template_file, target_files: List, template_column: str, target_column: str) -> List[Tuple[str, pd.DataFrame]]:
-    """Process template and target files."""
-    try:
-        # Load template file
-        template_df = load_csv(template_file)
-        if template_df is None:
-            return []
-            
-        template_values = set(template_df[template_column].astype(str))
-        template_row_count = len(template_df)
-        # Clear template_df from memory
-        del template_df
-        gc.collect()
-        
-        results = []
-        for target_file in target_files:
-            # Load target file
-            target_df = load_csv(target_file)
-            if target_df is None:
-                continue
-                
-            original_row_count = len(target_df)
-            # Filter target file
-            filtered_df = target_df[target_df[target_column].astype(str).isin(template_values)]
-            
-            # Get original filename without extension
-            original_name = target_file.name.split('.')[0]
-            if not filtered_df.empty:
-                results.append((original_name, filtered_df, original_row_count, template_row_count))
-            
-            # Clear target_df from memory
-            del target_df
-            gc.collect()
-        
+def process_files(template_file, target_files, template_column, target_column):
+    """Process multiple files and return filtered results."""
+    results = []
+    template_df = load_csv(template_file)
+    
+    if template_df is None:
         return results
-    except Exception as e:
-        st.error(f"Error processing files: {str(e)}")
-        return []
+    
+    template_values = set(template_df[template_column].astype(str))
+    template_row_count = len(template_df)
+    
+    for target_file in target_files:
+        target_df = load_csv(target_file)
+        if target_df is not None:
+            original_row_count = len(target_df)
+            filtered_df = target_df[target_df[target_column].astype(str).isin(template_values)]
+            if not filtered_df.empty:
+                # Convert DataFrame to CSV string immediately
+                csv_data = filtered_df.to_csv(index=False)
+                results.append((target_file.name, csv_data, original_row_count, template_row_count))
+    
+    return results
 
 def load_template(template_path):
     """Load the template CSV file."""
@@ -132,7 +89,9 @@ def create_excel_with_sheets(results):
     """Create an Excel file with multiple sheets, one for each result."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        for filename, df, _, _ in results:
+        for filename, csv_data, _, _ in results:
+            # Convert CSV string back to DataFrame for Excel
+            df = pd.read_csv(io.StringIO(csv_data))
             # Clean the sheet name (Excel has a 31 character limit for sheet names)
             sheet_name = filename[:31].replace('.', '_')
             df.to_excel(writer, sheet_name=sheet_name, index=False)
@@ -206,24 +165,28 @@ def main():
                 label="Download All Results (Excel with multiple sheets)",
                 data=excel_data,
                 file_name=f"filtered_results_{timestamp}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="download_all"
             )
         
         # Display individual results
-        for filename, df, original_rows, template_rows in results:
+        for i, (filename, csv_data, original_rows, template_rows) in enumerate(results):
             st.write(f"### Results for {filename}")
             st.write(f"Template rows: {template_rows}")
             st.write(f"Original input rows: {original_rows}")
+            
+            # Convert CSV string to DataFrame for display
+            df = pd.read_csv(io.StringIO(csv_data))
             st.write(f"Filtered rows: {len(df)}")
             st.write(f"Rows removed: {original_rows - len(df)}")
             
             # Create download button for individual file
-            csv = df.to_csv(index=False)
             st.download_button(
                 label=f"Download filtered {filename}",
-                data=csv,
+                data=csv_data,
                 file_name=f"filtered_{filename}",
-                mime="text/csv"
+                mime="text/csv",
+                key=f"download_{i}"
             )
 
 if __name__ == "__main__":
