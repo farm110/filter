@@ -126,6 +126,16 @@ def combine_filtered_results(filtered_dfs):
         return None
     return pd.concat(filtered_dfs, ignore_index=True)
 
+def create_excel_with_sheets(results):
+    """Create an Excel file with multiple sheets, one for each result."""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        for filename, df in results:
+            # Clean the sheet name (Excel has a 31 character limit for sheet names)
+            sheet_name = filename[:31].replace('.', '_')
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+    return output.getvalue()
+
 def main():
     st.set_page_config(
         page_title="CSV Filter Tool",
@@ -174,18 +184,16 @@ def main():
                             if results:
                                 st.success(f"Processing completed in {end_time - start_time:.2f} seconds")
                                 
-                                # Add download all button
+                                # Add download all button (Excel with multiple sheets)
                                 if len(results) > 1:
-                                    combined_df = combine_filtered_results([df for _, df in results])
-                                    if combined_df is not None:
-                                        csv = combined_df.to_csv(index=False)
-                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                        st.download_button(
-                                            label="Download All Results",
-                                            data=csv,
-                                            file_name=f"combined_results_{timestamp}.csv",
-                                            mime="text/csv"
-                                        )
+                                    excel_data = create_excel_with_sheets(results)
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    st.download_button(
+                                        label="Download All Results (Excel with multiple sheets)",
+                                        data=excel_data,
+                                        file_name=f"filtered_results_{timestamp}.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    )
                                 
                                 # Display individual results
                                 for filename, df in results:
