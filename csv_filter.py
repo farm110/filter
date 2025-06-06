@@ -43,9 +43,9 @@ def process_files(template_file, target_files, template_column, target_column):
             original_row_count = len(target_df)
             filtered_df = target_df[target_df[target_column].astype(str).isin(template_values)]
             if not filtered_df.empty:
-                # Convert DataFrame to CSV string immediately
+                # Store both DataFrame and CSV string
                 csv_data = filtered_df.to_csv(index=False)
-                results.append((target_file.name, csv_data, original_row_count, template_row_count))
+                results.append((target_file.name, filtered_df, csv_data, original_row_count, template_row_count))
     
     return results
 
@@ -89,9 +89,7 @@ def create_excel_with_sheets(results):
     """Create an Excel file with multiple sheets, one for each result."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        for filename, csv_data, _, _ in results:
-            # Convert CSV string back to DataFrame for Excel
-            df = pd.read_csv(io.StringIO(csv_data))
+        for filename, df, _, _, _ in results:
             # Clean the sheet name (Excel has a 31 character limit for sheet names)
             sheet_name = filename[:31].replace('.', '_')
             df.to_excel(writer, sheet_name=sheet_name, index=False)
@@ -170,13 +168,10 @@ def main():
             )
         
         # Display individual results
-        for i, (filename, csv_data, original_rows, template_rows) in enumerate(results):
+        for i, (filename, df, csv_data, original_rows, template_rows) in enumerate(results):
             st.write(f"### Results for {filename}")
             st.write(f"Template rows: {template_rows}")
             st.write(f"Original input rows: {original_rows}")
-            
-            # Convert CSV string to DataFrame for display
-            df = pd.read_csv(io.StringIO(csv_data))
             st.write(f"Filtered rows: {len(df)}")
             st.write(f"Rows removed: {original_rows - len(df)}")
             
