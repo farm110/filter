@@ -62,6 +62,7 @@ def process_files(template_file, target_files: List, template_column: str, targe
             return []
             
         template_values = set(template_df[template_column].astype(str))
+        template_row_count = len(template_df)
         # Clear template_df from memory
         del template_df
         gc.collect()
@@ -73,13 +74,14 @@ def process_files(template_file, target_files: List, template_column: str, targe
             if target_df is None:
                 continue
                 
+            original_row_count = len(target_df)
             # Filter target file
             filtered_df = target_df[target_df[target_column].astype(str).isin(template_values)]
             
             # Get original filename without extension
             original_name = target_file.name.split('.')[0]
             if not filtered_df.empty:
-                results.append((original_name, filtered_df))
+                results.append((original_name, filtered_df, original_row_count, template_row_count))
             
             # Clear target_df from memory
             del target_df
@@ -130,7 +132,7 @@ def create_excel_with_sheets(results):
     """Create an Excel file with multiple sheets, one for each result."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        for filename, df in results:
+        for filename, df, _, _ in results:
             # Clean the sheet name (Excel has a 31 character limit for sheet names)
             sheet_name = filename[:31].replace('.', '_')
             df.to_excel(writer, sheet_name=sheet_name, index=False)
@@ -143,6 +145,10 @@ def main():
         layout="wide"
     )
     
+    # Initialize session state for results if it doesn't exist
+    if 'filtered_results' not in st.session_state:
+        st.session_state.filtered_results = None
+    
     st.title("CSV Filter Tool")
     st.write("Filter CSV files based on values from a template file")
     
@@ -153,6 +159,7 @@ def main():
     if template_file:
         template_df = load_csv(template_file)
         if template_df is not None:
+            st.write(f"Template file contains {len(template_df)} rows")
             template_column = st.selectbox(
                 "Select template column to filter by",
                 options=template_df.columns.tolist()
@@ -182,36 +189,42 @@ def main():
                             end_time = time.time()
                             
                             if results:
+                                st.session_state.filtered_results = results
                                 st.success(f"Processing completed in {end_time - start_time:.2f} seconds")
-                                
-                                # Add download all button (Excel with multiple sheets)
-                                if len(results) > 1:
-                                    excel_data = create_excel_with_sheets(results)
-                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    st.download_button(
-                                        label="Download All Results (Excel with multiple sheets)",
-                                        data=excel_data,
-                                        file_name=f"filtered_results_{timestamp}.xlsx",
-                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                    )
-                                
-                                # Display individual results
-                                for filename, df in results:
-                                    st.write(f"### Results for {filename}")
-                                    st.write(f"Original rows: {len(load_csv(target_files[0]))}")
-                                    st.write(f"Filtered rows: {len(df)}")
-                                    st.write(f"Rows removed: {len(load_csv(target_files[0])) - len(df)}")
-                                    
-                                    # Create download button for individual file
-                                    csv = df.to_csv(index=False)
-                                    st.download_button(
-                                        label=f"Download filtered {filename}",
-                                        data=csv,
-                                        file_name=f"filtered_{filename}",
-                                        mime="text/csv"
-                                    )
                             else:
                                 st.error("No matching results found")
+    
+    # Display results from session state
+    if st.session_state.filtered_results:
+        results = st.session_state.filtered_results
+        
+        # Add download all button (Excel with multiple sheets)
+        if len(results) > 1:
+            excel_data = create_excel_with_sheets(results)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            st.download_button(
+                label="Download All Results (Excel with multiple sheets)",
+                data=excel_data,
+                file_name=f"filtered_results_{timestamp}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        
+        # Display individual results
+        for filename, df, original_rows, template_rows in results:
+            st.write(f"### Results for {filename}")
+            st.write(f"Template rows: {template_rows}")
+            st.write(f"Original input rows: {original_rows}")
+            st.write(f"Filtered rows: {len(df)}")
+            st.write(f"Rows removed: {original_rows - len(df)}")
+            
+            # Create download button for individual file
+            csv = df.to_csv(index=False)
+            st.download_button(
+                label=f"Download filtered {filename}",
+                data=csv,
+                file_name=f"filtered_{filename}",
+                mime="text/csv"
+            )
 
 if __name__ == "__main__":
     main() 
