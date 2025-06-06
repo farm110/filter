@@ -61,7 +61,7 @@ def process_files(template_file, target_files: List, template_column: str, targe
         if template_df is None:
             return []
             
-        template_values = set(template_df[template_column].unique())
+        template_values = set(template_df[template_column].astype(str))
         # Clear template_df from memory
         del template_df
         gc.collect()
@@ -74,11 +74,12 @@ def process_files(template_file, target_files: List, template_column: str, targe
                 continue
                 
             # Filter target file
-            filtered_df = filter_dataframe(target_df, template_values, target_column)
+            filtered_df = target_df[target_df[target_column].astype(str).isin(template_values)]
             
             # Get original filename without extension
             original_name = target_file.name.split('.')[0]
-            results.append((original_name, filtered_df))
+            if not filtered_df.empty:
+                results.append((original_name, filtered_df))
             
             # Clear target_df from memory
             del target_df
@@ -133,9 +134,11 @@ def main():
     )
     
     st.title("CSV Filter Tool")
+    st.write("Filter CSV files based on values from a template file")
     
     # Step 1: Upload template file
-    template_file = st.file_uploader("Upload Template CSV", type=['csv'])
+    st.header("Step 1: Upload Template File")
+    template_file = st.file_uploader("Upload template CSV file", type=['csv'])
     
     if template_file:
         template_df = load_csv(template_file)
@@ -146,55 +149,61 @@ def main():
             )
             
             # Step 2: Upload target files
+            st.header("Step 2: Upload Target Files")
             target_files = st.file_uploader(
-                "Upload Target CSV Files",
+                "Upload one or more CSV files to filter",
                 type=['csv'],
                 accept_multiple_files=True
             )
             
             if target_files:
-                target_column = st.selectbox(
-                    "Select target column to match with template",
-                    options=template_df.columns.tolist()
-                )
-                
-                if st.button("Process Files"):
-                    with st.spinner("Processing files..."):
-                        start_time = time.time()
-                        results = process_files(template_file, target_files, template_column, target_column)
-                        end_time = time.time()
-                        
-                        if results:
-                            st.success(f"Processing completed in {end_time - start_time:.2f} seconds")
+                # Get column names from first target file
+                first_target_df = load_csv(target_files[0])
+                if first_target_df is not None:
+                    target_column = st.selectbox(
+                        "Select target column to filter on",
+                        options=first_target_df.columns.tolist()
+                    )
+                    
+                    if st.button("Start Filtering"):
+                        with st.spinner("Processing files..."):
+                            start_time = time.time()
+                            results = process_files(template_file, target_files, template_column, target_column)
+                            end_time = time.time()
                             
-                            # Add download all button
-                            if len(results) > 1:
-                                combined_df = combine_filtered_results(results)
-                                if combined_df is not None:
-                                    csv = combined_df.to_csv(index=False)
-                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            if results:
+                                st.success(f"Processing completed in {end_time - start_time:.2f} seconds")
+                                
+                                # Add download all button
+                                if len(results) > 1:
+                                    combined_df = combine_filtered_results([df for _, df in results])
+                                    if combined_df is not None:
+                                        csv = combined_df.to_csv(index=False)
+                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                        st.download_button(
+                                            label="Download All Results",
+                                            data=csv,
+                                            file_name=f"combined_results_{timestamp}.csv",
+                                            mime="text/csv"
+                                        )
+                                
+                                # Display individual results
+                                for filename, df in results:
+                                    st.write(f"### Results for {filename}")
+                                    st.write(f"Original rows: {len(load_csv(target_files[0]))}")
+                                    st.write(f"Filtered rows: {len(df)}")
+                                    st.write(f"Rows removed: {len(load_csv(target_files[0])) - len(df)}")
+                                    
+                                    # Create download button for individual file
+                                    csv = df.to_csv(index=False)
                                     st.download_button(
-                                        label="Download All Results",
+                                        label=f"Download filtered {filename}",
                                         data=csv,
-                                        file_name=f"combined_results_{timestamp}.csv",
+                                        file_name=f"filtered_{filename}",
                                         mime="text/csv"
                                     )
-                            
-                            # Display individual results
-                            for i, (filename, df) in enumerate(results):
-                                st.write(f"### {filename}")
-                                st.dataframe(df)
-                                
-                                # Download button for individual file
-                                csv = df.to_csv(index=False)
-                                st.download_button(
-                                    label=f"Download {filename}",
-                                    data=csv,
-                                    file_name=f"filtered_{filename}",
-                                    mime="text/csv"
-                                )
-                        else:
-                            st.error("No matching results found")
+                            else:
+                                st.error("No matching results found")
 
-    if __name__ == "__main__":
-        main() 
+if __name__ == "__main__":
+    main() 
