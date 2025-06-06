@@ -8,9 +8,40 @@ import os
 from datetime import datetime
 
 def load_csv(file) -> pd.DataFrame:
-    """Load a CSV file into a pandas DataFrame."""
+    """Load a CSV file into a pandas DataFrame with robust error handling."""
     try:
-        return pd.read_csv(file)
+        # Reset file pointer to beginning
+        file.seek(0)
+        
+        # Try different encodings and parameters
+        encodings = ['utf-8', 'latin1', 'cp1252']
+        for encoding in encodings:
+            try:
+                df = pd.read_csv(
+                    file,
+                    encoding=encoding,
+                    on_bad_lines='skip',
+                    engine='python',  # More forgiving engine
+                    memory_map=False
+                )
+                if not df.empty:
+                    return df
+            except Exception:
+                file.seek(0)  # Reset file pointer for next attempt
+                continue
+        
+        # If all attempts fail, try with more lenient parameters
+        file.seek(0)
+        df = pd.read_csv(
+            file,
+            encoding='latin1',
+            on_bad_lines='skip',
+            engine='python',
+            memory_map=False,
+            sep=None,  # Auto-detect separator
+            skipinitialspace=True
+        )
+        return df
     except Exception as e:
         st.error(f"Error loading file {file.name}: {str(e)}")
         return None
@@ -34,12 +65,22 @@ def process_files(template_file, target_files, template_column, target_column):
     if template_df is None:
         return results
     
+    # Ensure template column exists
+    if template_column not in template_df.columns:
+        st.error(f"Template column '{template_column}' not found in template file")
+        return results
+    
     template_values = set(template_df[template_column].astype(str))
     template_row_count = len(template_df)
     
     for target_file in target_files:
         target_df = load_csv(target_file)
         if target_df is not None:
+            # Ensure target column exists
+            if target_column not in target_df.columns:
+                st.warning(f"Target column '{target_column}' not found in {target_file.name}, skipping...")
+                continue
+                
             original_row_count = len(target_df)
             filtered_df = target_df[target_df[target_column].astype(str).isin(template_values)]
             if not filtered_df.empty:
