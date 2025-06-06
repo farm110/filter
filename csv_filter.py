@@ -3,6 +3,7 @@ import streamlit as st
 import io
 from typing import List, Tuple
 import time
+import gc
 
 def load_csv(file) -> pd.DataFrame:
     """Load CSV file into pandas DataFrame with error handling."""
@@ -11,8 +12,14 @@ def load_csv(file) -> pd.DataFrame:
         content = file.getvalue().decode('utf-8')
         # Create a StringIO object
         csv_data = io.StringIO(content)
-        # Read CSV with more flexible parsing
-        return pd.read_csv(csv_data, encoding='utf-8', on_bad_lines='skip')
+        # Read CSV with more flexible parsing and optimized settings
+        return pd.read_csv(
+            csv_data,
+            encoding='utf-8',
+            on_bad_lines='skip',
+            engine='c',  # Use C engine for better performance
+            memory_map=True  # Use memory mapping for large files
+        )
     except Exception as e:
         st.error(f"Error reading file {file.name}: {str(e)}")
         return None
@@ -20,6 +27,9 @@ def load_csv(file) -> pd.DataFrame:
 def filter_dataframe(df: pd.DataFrame, template_values: set, column_name: str) -> pd.DataFrame:
     """Filter DataFrame based on template values."""
     try:
+        # Convert column to string type for consistent comparison
+        df[column_name] = df[column_name].astype(str)
+        template_values = {str(x) for x in template_values}
         return df[df[column_name].isin(template_values)]
     except Exception as e:
         st.error(f"Error filtering data: {str(e)}")
@@ -34,6 +44,9 @@ def process_files(template_file, target_files: List, template_column: str, targe
             return []
             
         template_values = set(template_df[template_column].unique())
+        # Clear template_df from memory
+        del template_df
+        gc.collect()
         
         results = []
         for target_file in target_files:
@@ -48,6 +61,10 @@ def process_files(template_file, target_files: List, template_column: str, targe
             # Get original filename without extension
             original_name = target_file.name.split('.')[0]
             results.append((original_name, filtered_df))
+            
+            # Clear target_df from memory
+            del target_df
+            gc.collect()
         
         return results
     except Exception as e:
@@ -55,6 +72,12 @@ def process_files(template_file, target_files: List, template_column: str, targe
         return []
 
 def main():
+    st.set_page_config(
+        page_title="CSV Filter",
+        page_icon="📊",
+        layout="wide"
+    )
+    
     st.title("CSV Filter Application")
     st.write("Filter CSV files based on values from a template file")
     
