@@ -46,17 +46,6 @@ def load_csv(file) -> pd.DataFrame:
         st.error(f"Error loading file {file.name}: {str(e)}")
         return None
 
-def filter_dataframe(df: pd.DataFrame, template_values: set, column_name: str) -> pd.DataFrame:
-    """Filter DataFrame based on template values."""
-    try:
-        # Convert column to string type for consistent comparison
-        df[column_name] = df[column_name].astype(str)
-        template_values = {str(x) for x in template_values}
-        return df[df[column_name].isin(template_values)]
-    except Exception as e:
-        st.error(f"Error filtering data: {str(e)}")
-        return df
-
 def process_files(template_file, target_files, template_column, target_column):
     """Process multiple files and return filtered results."""
     results = []
@@ -89,36 +78,6 @@ def process_files(template_file, target_files, template_column, target_column):
                 results.append((target_file.name, filtered_df, csv_data, original_row_count, template_row_count))
     
     return results
-
-def load_template(template_path):
-    """Load the template CSV file."""
-    try:
-        return pd.read_csv(template_path)
-    except Exception as e:
-        st.error(f"Error loading template: {str(e)}")
-        return None
-
-def filter_csv(input_file, template_df):
-    """Filter the input CSV based on the template columns."""
-    try:
-        # Read the input CSV file
-        input_df = pd.read_csv(input_file)
-        
-        # Get the columns from the template
-        template_columns = template_df.columns.tolist()
-        
-        # Filter the input DataFrame to only include columns that exist in the template
-        # and match the template's column order
-        available_columns = [col for col in template_columns if col in input_df.columns]
-        filtered_df = input_df[available_columns]
-        
-        # Reorder columns to match template
-        filtered_df = filtered_df[available_columns]
-        
-        return filtered_df
-    except Exception as e:
-        st.error(f"Error processing {input_file.name}: {str(e)}")
-        return None
 
 def combine_filtered_results(filtered_dfs):
     """Combine all filtered DataFrames into one."""
