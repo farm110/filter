@@ -45,7 +45,18 @@ def load_csv(file) -> pd.DataFrame:
     except Exception as e:
         st.error(f"Error loading file {file.name}: {str(e)}")
         return None
-
+        
+def filter_dataframe(df: pd.DataFrame, template_values: set, column_name: str) -> pd.DataFrame:
+    """Filter DataFrame based on template values."""
+    try:
+        # Convert column to string type for consistent comparison
+        df[column_name] = df[column_name].astype(str)
+        template_values = {str(x) for x in template_values}Add commentMore actions
+        return df[df[column_name].isin(template_values)]
+    except Exception as e:
+        st.error(f"Error filtering data: {str(e)}")
+        return df
+        
 def process_files(template_file, target_files, template_column, target_column):
     """Process multiple files and return filtered results."""
     results = []
