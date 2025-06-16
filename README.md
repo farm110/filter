@@ -1,35 +1,50 @@
-# CSV Filter Application
+# File Filter Tool
 
-A Streamlit application that filters CSV files based on values from a template file.
+A Streamlit application that allows you to filter CSV and Excel files based on values from a template file.
 
 ## Features
-- Upload template CSV file
-- Upload multiple target CSV files
-- Filter data based on selected columns
-- Download filtered results
 
-## Quick Start
-1. Upload a template CSV file
+- Support for both CSV and Excel files (.csv, .xlsx, .xls)
+- Multiple file processing
+- Robust file handling with multiple encoding support
+- Excel output with multiple sheets
+- Individual file downloads
+- Progress tracking and statistics
+
+## Deployment on Streamlit Cloud
+
+1. Fork this repository to your GitHub account
+2. Go to [Streamlit Cloud](https://streamlit.io/cloud)
+3. Sign in with your GitHub account
+4. Click "New app"
+5. Select your forked repository
+6. Set the main file path to `csv_filter.py`
+7. Click "Deploy"
+
+The app will be deployed in a few minutes and you'll get a public URL to share.
+
+## Local Development
+
+1. Clone the repository
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+3. Run the app:
+```bash
+streamlit run csv_filter.py
+```
+
+## Usage
+
+1. Upload a template file (CSV or Excel)
 2. Select the column to filter by
-3. Upload one or more target CSV files
+3. Upload one or more target files
 4. Select the target column
 5. Click "Start Filtering"
 6. Download the filtered results
 
-## Local Development
-```bash
-# Create virtual environment
-python -m venv venv
+## Requirements
 
-# Activate virtual environment
-# Windows:
-.\venv\Scripts\activate
-# Unix/MacOS:
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-streamlit run csv_filter.py
-``` 
+- Python 3.7+
+- Dependencies listed in requirements.txt 

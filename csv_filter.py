@@ -7,41 +7,53 @@ import gc
 import os
 from datetime import datetime
 
-def load_csv(file) -> pd.DataFrame:
-    """Load a CSV file into a pandas DataFrame with robust error handling."""
+def load_file(file) -> pd.DataFrame:
+    """Load a CSV or Excel file into a pandas DataFrame with robust error handling."""
     try:
         # Reset file pointer to beginning
         file.seek(0)
         
-        # Try different encodings and parameters
-        encodings = ['utf-8', 'latin1', 'cp1252']
-        for encoding in encodings:
-            try:
-                df = pd.read_csv(
-                    file,
-                    encoding=encoding,
-                    on_bad_lines='skip',
-                    engine='python',  # More forgiving engine
-                    memory_map=False
-                )
-                if not df.empty:
-                    return df
-            except Exception:
-                file.seek(0)  # Reset file pointer for next attempt
-                continue
+        # Check file extension
+        file_extension = file.name.split('.')[-1].lower()
         
-        # If all attempts fail, try with more lenient parameters
-        file.seek(0)
-        df = pd.read_csv(
-            file,
-            encoding='latin1',
-            on_bad_lines='skip',
-            engine='python',
-            memory_map=False,
-            sep=None,  # Auto-detect separator
-            skipinitialspace=True
-        )
-        return df
+        if file_extension == 'xlsx' or file_extension == 'xls':
+            # Handle Excel files
+            try:
+                df = pd.read_excel(file, engine='openpyxl')
+                return df
+            except Exception as e:
+                st.error(f"Error loading Excel file {file.name}: {str(e)}")
+                return None
+        else:
+            # Handle CSV files
+            encodings = ['utf-8', 'latin1', 'cp1252']
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(
+                        file,
+                        encoding=encoding,
+                        on_bad_lines='skip',
+                        engine='python',
+                        memory_map=False
+                    )
+                    if not df.empty:
+                        return df
+                except Exception:
+                    file.seek(0)
+                    continue
+            
+            # If all attempts fail, try with more lenient parameters
+            file.seek(0)
+            df = pd.read_csv(
+                file,
+                encoding='latin1',
+                on_bad_lines='skip',
+                engine='python',
+                memory_map=False,
+                sep=None,
+                skipinitialspace=True
+            )
+            return df
     except Exception as e:
         st.error(f"Error loading file {file.name}: {str(e)}")
         return None
@@ -50,7 +62,7 @@ def load_csv(file) -> pd.DataFrame:
 def process_files(template_file, target_files, template_column, target_column):
     """Process multiple files and return filtered results."""
     results = []
-    template_df = load_csv(template_file)
+    template_df = load_file(template_file)
     
     if template_df is None:
         return results
@@ -64,7 +76,7 @@ def process_files(template_file, target_files, template_column, target_column):
     template_row_count = len(template_df)
     
     for target_file in target_files:
-        target_df = load_csv(target_file)
+        target_df = load_file(target_file)
         if target_df is not None:
             # Ensure target column exists
             if target_column not in target_df.columns:
@@ -98,7 +110,7 @@ def create_excel_with_sheets(results):
 
 def main():
     st.set_page_config(
-        page_title="CSV Filter Tool",
+        page_title="File Filter Tool",
         page_icon="📊",
         layout="wide"
     )
@@ -107,15 +119,15 @@ def main():
     if 'filtered_results' not in st.session_state:
         st.session_state.filtered_results = None
     
-    st.title("CSV Filter Tool")
-    st.write("Filter CSV files based on values from a template file")
+    st.title("File Filter Tool")
+    st.write("Filter CSV and Excel files based on values from a template file")
     
     # Step 1: Upload template file
     st.header("Step 1: Upload Template File")
-    template_file = st.file_uploader("Upload template CSV file", type=['csv'])
+    template_file = st.file_uploader("Upload template file", type=['csv', 'xlsx', 'xls'])
     
     if template_file:
-        template_df = load_csv(template_file)
+        template_df = load_file(template_file)
         if template_df is not None:
             st.write(f"Template file contains {len(template_df)} rows")
             template_column = st.selectbox(
@@ -126,14 +138,14 @@ def main():
             # Step 2: Upload target files
             st.header("Step 2: Upload Target Files")
             target_files = st.file_uploader(
-                "Upload one or more CSV files to filter",
-                type=['csv'],
+                "Upload one or more files to filter",
+                type=['csv', 'xlsx', 'xls'],
                 accept_multiple_files=True
             )
             
             if target_files:
                 # Get column names from first target file
-                first_target_df = load_csv(target_files[0])
+                first_target_df = load_file(target_files[0])
                 if first_target_df is not None:
                     target_column = st.selectbox(
                         "Select target column to filter on",
